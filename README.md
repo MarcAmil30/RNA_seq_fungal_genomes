@@ -18,6 +18,8 @@ base_url = "https://bioinfo.njau.edu.cn/fungiExp/"
 ```
 
 Change the <code>taxon_id</code> based on the taxon id at the end of the link
+
+
 3. Run <code>gene_expression_extraction_fungiexp.py</code>
 
 4. This will create a new directory named the same as the taxon_id -->  download all the Gene expression .tsv file --> this will be placed into the created directory 
