@@ -17,7 +17,7 @@ taxon_id = "245562"
 base_url = "https://bioinfo.njau.edu.cn/fungiExp/"
 ```
 
-Change the <code>taxon_id</code> based on the taxon id at the end of the link
+Change the <code>taxon_id</code> based on the taxon id at the end of the link `https://bioinfo.njau.edu.cn/fungiExp/info.php?taxonId={taxon_id}`
 
 
 3. Run <code>gene_expression_extraction_fungiexp.py</code>
