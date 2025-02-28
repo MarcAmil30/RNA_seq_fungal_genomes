@@ -1,4 +1,6 @@
-## Assessing GEO vs FungiExp 
+
+
+##### Assessing GEO vs FungiExp 
 The aim of this is to check if the TPM values in FungiExp align closely with the RPKM of the GEO dataset or a TPM value from your RNA-seq pipeline. This is achieved through looking at the correlation
 
 #### Why log transform?
