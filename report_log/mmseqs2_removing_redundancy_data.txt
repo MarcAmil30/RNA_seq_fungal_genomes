@@ -1,0 +1,219 @@
+Remove redundancy in a 5'/3' DNA sequences using MMseqs2 for nucleotides 
+
+1. Convert parquet to FASTA
+Why?
+MMseqs2 expects FASTA (or FASTQ) files. So first, you need to extract your sequences from the Parquet files and create a standard FASTA file. This is also a great place to keep the gene_id in the header so you don’t lose that information.
+
+How?
+- Read each Parquet file (e.g., yarrowia_lipolytica_three_prime.parquet).
+- For each row, retrieve the gene_id and sequence (like three_prime_seq).
+- Create a FASTA entry where the header contains the gene_id (plus anything else you want to retain), and the body is the DNA sequence.
+
+
+2. Create an MMseqs2 database 
+Why?
+Before clustering, you need to convert your FASTA to an MMseqs2 database format 
+
+How? 
+mmseqs createdb yarrowia_lipolytica_three_prime.fasta yarrowia_lipolytica_3prime_DB
+
+- yarrowia_lipolytica_three_prime.fasta is your input FASTA file
+- yarrowia_lipolytica_3prime_DB is the name of the MMseqs2 database that will be created.
+
+Repeat this step for all different species OR combine everything (three prime and another for five prim or both three prime and five prime).
+
+
+3. Cluster the Sequences 
+Why?
+Clustering will group highly similar (i.e. redundant) sequences). You can set thresholds (identity, coverage) to tune how stringent you want the clustering to be. 
+
+There are two primary ways to cluster in MMSeqs2:
+1. easy-cluster (more sensitive, automatically sets up a cascade)
+2. cluster (classic clustering, more manual thing)
+3. easy-linclust (linear time, much faster for huge datasets, but slightly less sensitive).
+
+ 3A. Using easy-cluster
+mmseqs easy-cluster yarrowia_lipolytica_three_prime.fasta yarrowia_lipolytica_3prime_clustered tmp \
+  --min-seq-id 0.9 -c 0.8 --cov-mode 1
+
+	- --min-seq-id 0.9 = only cluster sequences that have >90% identity (feel free to adjust)
+	- -c 0.8 --cov-mode 1 = alignment must cover >80% of the shorter sequence
+	- tmp = a temporary directory for intermediate files (MMSeqs2 can use a lot of space, so ensure there's enough storage).
+
+This creates a clustering results folder/database named 
+yarrowia_lipolytica_3prime_clustered.
+The final representative sequences are usually output to something like 
+yarrowia_lipolytica_3prime_clustered_rep_seq.fasta.
+
+
+3B. Using cluster (the manual module)
+1. Cluster:
+	mmseqs cluster yarrowia_lipolytica_3prime_DB yarrowia_lipolytica_3prime_clu tmp \
+  --min-seq-id 0.9 -c 0.8 --cov-mode 1
+
+2. Create a TSV (optional):
+mmseqs createtsv yarrowia_lipolytica_3prime_DB yarrowia_lipolytica_3prime_DB \
+                 yarrowia_lipolytica_3prime_clu yarrowia_lipolytica_3prime_clu.tsv
+
+3. Extract representative sequences 
+mmseqs createseqfiledb yarrowia_lipolytica_3prime_DB \
+                       yarrowia_lipolytica_3prime_clu \
+                       yarrowia_lipolytica_3prime_clu_seq
+mmseqs result2flat yarrowia_lipolytica_3prime_DB \
+                   yarrowia_lipolytica_3prime_DB \
+                   yarrowia_lipolytica_3prime_clu_seq \
+                   yarrowia_lipolytica_3prime_clu_rep.fasta
+
+The final yarrowia_lipolytica_3prime_clu_rep.fasta contains one representative sequence per cluster.
+
+
+
+4.  Decide on Thresholds 
+	- --min-seq-id: This is the minimum sequence identity for two sequences to be considered the same cluster. For more stringent clustering (fewer clusters, less redundancy), increase this. For looser clustering (more sequences end up in the same cluster), lower it.
+	- Coverage (-c and --cov-mode): Usually you want a decent fraction of each sequence to align to call them “redundant.” Common coverage cutoffs can be 0.8 or 0.9.
+	- Sensitivity: If you use mmseqs easy-cluster, you can add -s 7 for high sensitivity (but slower) or -s 1 for very fast but less sensitive.
+
+
+5. Keep the Gene IDs 
+
+- If you included gene_id (or transcript_id) in the FASTA header, then when you run the step mmseqs createtsv ... or you produce a “representatives FASTA,” the headers will still contain your gene IDs.
+- For example, a representative entry in your final FASTA might look like:
+>M409DRAFT_15823
+TGATTGAGTTGGACGGTGGGGTAAG...
+
+If you did >{gene_id}|{transcript_id}, that will also appear in the final representative file.
+
+- Pro tip: If you want a detailed mapping of which sequences got clustered into which representative, the TSV file from createtsv or easy-cluster can help. Each line will show sequence_id → representative_id, which you can parse to figure out the gene IDs.
+
+6. Final output 
+
+- A set of representative sequences in FASTA format (the “non-redundant” set).
+- A table (TSV) that tells you which gene IDs belong to which cluster.
+
+At that point, you can load the “non-redundant” FASTA into your GPT-based system if your main goal is to have a cleaner dataset with less repetition.
+
+
+
+Typical Step-by-Step Summary
+1. Parquet → FASTA
+	Extract gene_id and the actual sequence from each Parquet row and write to a FASTA file.
+
+2. Create an MMseqs2 DB
+	mmseqs createdb <my_sequences.fasta> <my_DB>
+
+3. Cluster
+	Either:
+		mmseqs easy-cluster <FASTA> <out_prefix> tmp --min-seq-id X -c Y ...
+	Or the manual approach:
+		mmseqs cluster <my_DB> <my_clu> tmp --min-seq-id X -c Y --cov-mode 1
+		mmseqs createtsv <my_DB> <my_DB> <my_clu> <my_clu.tsv>
+		mmseqs createseqfiledb ... and mmseqs result2flat ...
+
+4. Inspect results
+	- Check how many clusters you got (the “rep” file).
+	- Check the mapping via TSV if you want to see which sequences went where.
+	- Use the representative FASTA
+	- The final reduced / non-redundant dataset for your GPT training.
+
+-------------------------------------
+Summary experiments + hypothesis to test:
+1. 5′ vs 3′ Conservation Across Species
+→ Compare cluster sizes of 5′ and 3′ flanking regions across species to see if promoters (5′) or terminators (3′) are more conserved.
+Insight: Conserved regions may indicate essential regulatory elements like promoters or terminators.
+
+2. Cross-Species “Ortho-Regulon” Clusters
+→ Check if orthologous genes cluster together based on shared 5′ or 3′ sequences.
+Insight: Identifies conserved regulatory signals vs. diverged ones across species.
+
+3. Identify Genes “Left Out” After Clustering
+→ Find singleton clusters (unique flanking sequences) and check their gene IDs.
+Insight: Could reveal species-specific elements, novel regulatory signals, or horizontally transferred genes.
+
+4. Differences in Motif Usage
+→ Run motif analysis (e.g., TATA boxes, poly(A) signals) on cluster representatives.
+Insight: Reveals whether certain motifs are widely conserved or specific to certain gene clusters.
+
+5. Distribution of Cluster Sizes
+→ Analyze cluster size distribution to detect highly redundant vs. unique regulatory regions.
+Insight: Large clusters may represent repeats, while small ones could indicate unique or specialized regulation.
+
+6. 5′ vs 3′ Combined vs. Separate
+→ Check if some clusters contain both 5′ and 3′ sequences, possibly due to shared repetitive elements.
+Insight: Could indicate transposons, shared regulatory motifs, or structural elements in fungal genomes.
+
+7. Correlate with Expression Data (If Available)
+→ Compare clustered sequences with RNA-seq expression levels.
+Insight: Clusters may correspond to high vs. low expression patterns, linking regulatory sequences to gene activity.
+
+
+------------------------------------
+
+
+Interesting experiments + hypothesis to test:
+1. Compare 5′ vs 3′ Conservation Across Species
+	Hypothesis: “Certain genes (especially housekeeping genes) will have more conserved 5′ regulatory regions across different fungal species, whereas 3′ regions might be less/more conserved.”
+
+	How to test:
+	Look at cluster sizes for each gene’s 5′ region across species: do some genes yield very large clusters (indicating a high degree of sequence similarity) vs. others that remain mostly unique (small clusters)?
+	Repeat for 3′ regions and compare whether 3′ flanks are more or less conserved than 5′.
+
+	What it might tell you:
+Conserved regulatory elements often hint at essential promoter/enhancer or terminator signals that can be important for gene expression across diverse species.
+
+2. Cross-Species “Ortho-Regulon” Clusters
+	Hypothesis: “Genes that are orthologous across different species might share similar flanking regions (clusters).”
+	How to test: If you have orthology mappings or standard gene family annotations (like from OrthoDB or similar), see if orthologous genes end up in the same cluster or in highly similar clusters.
+Check whether the same gene family from multiple species has a single cluster representing their 5′ or 3′ region.
+
+	What it might tell you:Which gene families have strongly conserved regulatory signals vs. which have widely diverged flanking regions. This can point to differences in transcriptional regulation across evolutionary lineages.
+
+3.  Identify Genes “Left Out” After Clustering
+
+Hypothesis: “Some flanking sequences are highly unique and don’t group well with others. They might represent special or species-specific functions.”
+How to test:
+After clustering, see which sequences end up in singleton clusters (or very small clusters). That means they don’t share enough similarity with any other flanking region to merge.
+Note the gene IDs that remain singletons. Are they in certain gene families or species? Are they possibly horizontally transferred genes or extremely diverged?
+What it might tell you:
+Potential outliers could be novel regulatory elements, genes under unique selective pressure, or species-specific expansions.
+
+
+4. Differences in Motif Usage
+
+Hypothesis: “Clusters might correlate with presence or absence of certain known motifs (like TATA boxes in promoters or poly(A) signals in terminators).”
+How to test:
+Grab each cluster’s representative sequence and run a motif search (e.g., MEME, FIMO, or known fungal motif databases).
+See if certain clusters share a particular motif combination.
+What it might tell you:
+Whether certain motif structures are widely reused across many genes (large cluster) or if motif usage is more specialized (small cluster). Could reveal interesting aspects of promoter/terminator architecture.
+
+5. Distribution of Cluster Sizes
+
+Hypothesis: “Essential or highly expressed genes might have more similar regulatory regions. Alternatively, cluster size might reflect certain bias (e.g., repetitive elements).”
+How to test:
+Analyze the distribution of cluster sizes (histogram or boxplot).
+Check if large clusters are associated with repetitive DNA or if they correspond to known housekeeping genes.
+What it might tell you:
+Big clusters could indicate repeats or near-identical sequences across genes/species. Tiny clusters might indicate unique, specialized regulation.
+
+
+6. 5′ vs 3′ Combined vs. Separate
+
+If you do combine 5′ and 3′ sequences in one big dataset:
+
+Hypothesis: “If 5′ and 3′ flanks cluster together, maybe they contain repetitive elements or transposons that appear in both upstream and downstream regions.”
+How to test:
+Tag each sequence as “5prime” or “3prime” in your FASTA headers.
+After clustering, see if any cluster has a mix of 5′ and 3′ tags. Does it happen at all? Possibly not, but if it does, you’ve discovered some shared repetitive element bridging both ends of a gene.
+What it might tell you:
+There may be unusual sequences that appear in both the 5′ and 3′ contexts—could be transposons, repeated telomeric-like elements, etc.
+
+
+7.  Correlate with Expression Data (If Available)
+Hypothesis: “Genes with similar 5′ regulatory sequences might have similar expression levels or patterns.”
+How to test:
+If you have transcriptome (RNA-seq) data for one or more of these fungal species, map each gene’s expression to its cluster membership.
+Check if high-expression genes cluster in distinct ways from low-expression genes.
+What it might tell you:
+Whether certain regulatory motifs lead to high or low gene expression, or if there’s a cluster that corresponds to strongly induced genes vs. housekeeping genes.
+
+
