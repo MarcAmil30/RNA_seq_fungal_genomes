@@ -28,6 +28,7 @@ Change the <code>taxon_id</code> based on the taxon id at the end of the link `h
 This part of the code processess FungiExp TPM data, filter based on TPM and RSD values and generates plots for analysis.
 
 #### Files
+In the **code** directory:
 
 - <code>Filter_FungiExp_TPM_RSD.py</code>: Main script to process + produce plots for FungiExp data
 - <code>tpm_rsd_functions.py</code>: Contains helper functions used in <code>Filter_FungiExp_TPM_RSD.py</code> for filtering, transforming, plotting data.
@@ -36,16 +37,17 @@ This part of the code processess FungiExp TPM data, filter based on TPM and RSD 
 
 1. **Prepare your data**:
     - Place your FungiExp folders in the `fungiexp_data` directory. There are currently some folders there for trial but add or move the directories there. 
-    - Ensure you have a mapping file `output_with_species.csv` with `Taxon_ID` and `Species_name` columns.   
+    - Ensure you have the mapping file `output_with_species.csv` with `Taxon_ID` and `Species_name` columns.   
 
 2. **Run the main script**:
 
-<code>python Filter_FungiExp_TPM_RSD.py</code>
+    - Go to the code directory and run the command below:
+    <code>python Filter_FungiExp_TPM_RSD.py</code>
 
 3. **Output**:
 
-- Filtered and transformed data saved as tsv files 
-- Plots saved as a PNG files in the `output_files_species_fungiexp` directory.
+    - Filtered and transformed data saved as .tsv files 
+    - Plots saved as a PNG files in the `output_files_species_fungiexp` directory.
 
 **tpm_rsd_functions.py**:
 - Functions:
